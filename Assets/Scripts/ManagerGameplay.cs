@@ -2,18 +2,22 @@ using UnityEngine;
 
 public class ManagerGameplay : MonoBehaviour
 {
-    public Color colorPlayer1;
-    public Color colorPlayer2;
+    private Settings S;
+
     private Color colorPreviewPlayer1;
     private Color colorPreviewPlayer2;
     public Camera myCamera;
 
     public GameObject previewPiece;
+    public Sprite spritePiece1;
+    public Sprite spritePiece2;
     private SpriteRenderer rendererPreviewPiece;
-    public GameObject prefabPiece;
+    public GameObject prefabPiece1;
+    public GameObject prefabPiece2;
     public Transform parentPieces;
 
     public int boardSize;
+    private bool isPlaying;
     private PieceState[,] board;
     private bool player2Turn;
 
@@ -26,14 +30,18 @@ public class ManagerGameplay : MonoBehaviour
 
     private void Start()
     {
+        S = Settings.S;
+
         rendererPreviewPiece = previewPiece.GetComponent<SpriteRenderer>();
-        colorPreviewPlayer1 = new Color(colorPlayer1.r, colorPlayer1.g, colorPlayer1.b, 0.6f);
-        colorPreviewPlayer2 = new Color(colorPlayer2.r, colorPlayer2.g, colorPlayer2.b, 0.6f);
-        Restart();
+        colorPreviewPlayer1 = new Color(S.colorPlayer1.r, S.colorPlayer1.g, S.colorPlayer1.b, 0.6f);
+        colorPreviewPlayer2 = new Color(S.colorPlayer2.r, S.colorPlayer2.g, S.colorPlayer2.b, 0.6f);
+        ButtonRestart();
     }
 
     private void Update()
     {
+        if (!isPlaying) return;
+
         float x = myCamera.ScreenToWorldPoint(Input.mousePosition).x;
         float y = myCamera.ScreenToWorldPoint(Input.mousePosition).y;
         Vector2Int currentCell = new Vector2Int(Mathf.RoundToInt(x), Mathf.RoundToInt(y));
@@ -44,6 +52,7 @@ public class ManagerGameplay : MonoBehaviour
         {
             if (board[currentCell.x, currentCell.y] == PieceState.EMPTY) previewPiece.SetActive(true);
             previewPiece.transform.position = new Vector2(currentCell.x, currentCell.y);
+            rendererPreviewPiece.sprite = player2Turn ? spritePiece2 : spritePiece1;
             rendererPreviewPiece.color = player2Turn ? colorPreviewPlayer2 : colorPreviewPlayer1;
 
             if (Input.GetMouseButtonDown(0))
@@ -51,7 +60,7 @@ public class ManagerGameplay : MonoBehaviour
         }
     }
 
-    private void Restart()
+    public void ButtonRestart()
     {
         board = new PieceState[boardSize, boardSize];
 
@@ -60,6 +69,8 @@ public class ManagerGameplay : MonoBehaviour
 
         player2Turn = false;
         ManagerUI.MUI.PlayerTurn(false);
+        ManagerUI.MUI.Restart();
+        isPlaying = true;
     }
 
     private void Play(Vector2 _pos)
@@ -69,8 +80,8 @@ public class ManagerGameplay : MonoBehaviour
 
         if (board[toPlayX, toPlayY] != PieceState.EMPTY) return;
 
-        SpriteRenderer sr = Instantiate(prefabPiece, _pos, Quaternion.identity, parentPieces).GetComponent<SpriteRenderer>();
-        sr.color = player2Turn ? colorPlayer2 : colorPlayer1;
+        SpriteRenderer sr = Instantiate(player2Turn ? prefabPiece2 : prefabPiece1, _pos, Quaternion.identity, parentPieces).GetComponent<SpriteRenderer>();
+        sr.color = player2Turn ? S.colorPlayer2 : S.colorPlayer1;
         board[toPlayX, toPlayY] = player2Turn ? PieceState.PLAYER2 : PieceState.PLAYER1;
 
         CheckWin(new Vector2Int(toPlayX, toPlayY));
@@ -80,12 +91,16 @@ public class ManagerGameplay : MonoBehaviour
     {
         if (CalculateLineLength(_playedCell) >= 3)
         {
-            Debug.Log(player2Turn ? "Player 2 Win" : "Player 1 Win");
+            ManagerUI.MUI.Endgame(player2Turn ? 2 : 1);
+            isPlaying = false;
             return;
         }
 
         if (IsDraw())
-            Restart();
+        {
+            ManagerUI.MUI.Endgame(0);
+            isPlaying = false;
+        }
         else
             NextTurn();
     }
@@ -128,10 +143,11 @@ public class ManagerGameplay : MonoBehaviour
         }
 
         maxLineLenght = Mathf.Max(maxLineLenght, lineLength);
+
+        //Horizontal
         currentCell = _playedCell;
         lineLength = 1;
 
-        //Horizontal
         while (currentCell.x + 1 < boardSize)
         {
             currentCell.x++;
@@ -147,8 +163,51 @@ public class ManagerGameplay : MonoBehaviour
         }
 
         maxLineLenght = Mathf.Max(maxLineLenght, lineLength);
-        lineLength = 1;
+
+        //Diagonal Up
         currentCell = _playedCell;
+        lineLength = 1;
+
+        while (currentCell.x + 1 < boardSize && currentCell.y + 1 < boardSize)
+        {
+            currentCell.x++;
+            currentCell.y++;
+            if (board[currentCell.x, currentCell.y] == (player2Turn ? PieceState.PLAYER2 : PieceState.PLAYER1)) lineLength++;
+        }
+
+        currentCell = _playedCell;
+
+        while (currentCell.x - 1 >= 0 && currentCell.y - 1 >= 0)
+        {
+            currentCell.x--;
+            currentCell.y--;
+            if (board[currentCell.x, currentCell.y] == (player2Turn ? PieceState.PLAYER2 : PieceState.PLAYER1)) lineLength++;
+        }
+
+        maxLineLenght = Mathf.Max(maxLineLenght, lineLength);
+
+        //Diagonal Down
+        currentCell = _playedCell;
+        lineLength = 1;
+
+        while (currentCell.x + 1 < boardSize && currentCell.y - 1 >= 0)
+        {
+            currentCell.x++;
+            currentCell.y--;
+            if (board[currentCell.x, currentCell.y] == (player2Turn ? PieceState.PLAYER2 : PieceState.PLAYER1)) lineLength++;
+        }
+
+        currentCell = _playedCell;
+
+        while (currentCell.x - 1 >= 0 && currentCell.y + 1 < boardSize)
+        {
+            currentCell.x--;
+            currentCell.y++;
+            if (board[currentCell.x, currentCell.y] == (player2Turn ? PieceState.PLAYER2 : PieceState.PLAYER1)) lineLength++;
+        }
+
+        maxLineLenght = Mathf.Max(maxLineLenght, lineLength);
+
         return maxLineLenght;
     }
 }
